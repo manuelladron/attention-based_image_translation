@@ -185,7 +185,14 @@ def training_loop(dataloader_X, dataloader_Y, opts):
 
     # Create generators and discriminators
     G_XtoY, G_YtoX, D_X, D_Y = create_model(opts)
-    
+
+    # print('\n=========== PARAMS =================')
+    # for name, param in G_XtoY.named_parameters():
+    #     print('name: ', name)
+    #     print('param: ', param.shape)
+
+
+    # Load generators, TODO: optimize this pipeline
 #     G_XtoY.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/G_YtoX_iter20000.pkl'))
 #     G_XtoY.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/G_XtoY_iter20000.pkl'))
     
@@ -195,16 +202,16 @@ def training_loop(dataloader_X, dataloader_Y, opts):
     g_params = list(G_XtoY.parameters()) + list(G_YtoX.parameters())  # Get generator parameters
     d_params = list(D_X.parameters()) + list(D_Y.parameters())  # Get discriminator parameters
 
-    
     # Create optimizers for the generators and discriminators
     g_optimizer = optim.Adam(g_params, opts.lr, [opts.beta1, opts.beta2])
     d_optimizer = optim.Adam(d_params, opts.lr, [opts.beta1, opts.beta2])
 
-    iter_X = iter(dataloader_X)
-    iter_Y = iter(dataloader_Y)
 
     # Get some fixed data from domains X and Y for sampling. These are images that are held
     # constant throughout training, that allow us to inspect the model's performance.
+    iter_X = iter(dataloader_X)
+    iter_Y = iter(dataloader_Y)
+
     fixed_X = utils.to_var(iter_X.next()[0])
     fixed_Y = utils.to_var(iter_Y.next()[0])
 
@@ -244,14 +251,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         #            TRAIN THE DISCRIMINATORS
         # ============================================
 
-        #########################################
-        ##             FILL THIS IN            ##
-        #########################################
-
         # Train with real images
         d_optimizer.zero_grad()
 
-        # 1. Compute the discriminator losses on real images
+        # ==============================================================================================
+        # ==================== 1. Compute the discriminator losses on real images ======================
+        # ==============================================================================================
         if opts.label_smooth:
             label_real_x = torch.FloatTensor(bs_x).uniform_(0.8, 0.9).to(device)
             label_real_y = torch.FloatTensor(bs_y).uniform_(0.8, 0.9).to(device)
@@ -272,9 +277,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         logger.add_scalar('D/YX/real', D_Y_loss, iteration)
         DX_reals.append(D_X_loss.item())
         DY_reals.append(D_Y_loss.item())
-        
-        # Train with fake images
+
         d_optimizer.zero_grad()
+
+        # ==============================================================================================
+        # ==================== 2. Compute the discriminator losses on fake images ======================
+        # ==============================================================================================
 
         # 2. Generate fake images that look like domain X based on real images in domain Y
         fake_X = G_YtoX(images_Y)
@@ -293,7 +301,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         D_Y_loss = torch.nn.functional.mse_loss(D_Y(fake_Y.detach()), label_fake_y, reduce='mean')# / bs_x
 
         d_fake_loss = D_X_loss + D_Y_loss
-        
+
+        # Updating discriminator on fake every other iteration
         if iteration % 2 == 0:
             d_fake_loss.backward()
             d_optimizer.step()
@@ -307,9 +316,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         #            TRAIN THE GENERATORS
         # =========================================
 
-
         #########################################
-        ##    FILL THIS IN: Y--X-->Y CYCLE     ##
+        ########   Y--X-->Y CYCLE     ###########
         #########################################
         g_optimizer.zero_grad()
 
@@ -366,7 +374,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         g_loss.backward()
         g_optimizer.step()
         GX_losses.append(gX_loss.item())
-        
+
+
+        # =========================================
+        #            PLOTTING AND SAVING
+        # =========================================
+
         # Print the log info and plot graphs 
         if iteration % opts.log_step == 0:
             print('Iteration [{:5d}/{:5d}] | d_real_loss: {:6.4f} | d_Y_loss: {:6.4f} | d_X_loss: {:6.4f} | '
@@ -447,6 +460,7 @@ def main(opts):
     # Create  dataloaders for images from the two domains X and Y
     dataloader_X = get_data_loader(opts.X, opts=opts)
     dataloader_Y = get_data_loader(opts.Y, opts=opts)
+    print('dataloaders created')
 
     # Create checkpoint and sample directories
     utils.create_dir(opts.checkpoint_dir)
@@ -496,14 +510,18 @@ def create_parser():
     parser.add_argument('--lambda_cycle', type=float, default=10)
 
     # Data sources
-    parser.add_argument('--X', type=str, default='pokemon/Water', help='Choose the type of images for domain X.')
-    parser.add_argument('--Y', type=str, default='pokemon/Fire', help='Choose the type of images for domain Y.')
+    parser.add_argument('--X', type=str, default='/Users/manuelladron/iCloud_archive/Documents/_CMU/PHD-CD/spring2021'
+                                                 '/16726_learning_based_image_synthesis/homeworks/hw3/16726_s21_hw3-main/data/cat/grumpifyAprocessed',
+                        help='Choose the type of images for domain X.')
+    parser.add_argument('--Y', type=str, default='/Users/manuelladron/iCloud_archive/Documents/_CMU/PHD-CD/spring2021'
+                                                 '/16726_learning_based_image_synthesis/homeworks/hw3/16726_s21_hw3-main/data/cat/grumpifyBprocessed',
+                        help='Choose the type of images for domain Y.')
     parser.add_argument('--ext', type=str, default='*.png', help='Choose the type of images for domain Y.')
     parser.add_argument('--data_aug', type=str, default='deluxe', help='basic / none/ deluxe')
 
     # Saving directories and checkpoint/sample iterations
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/pokemon_water_fire')
-    parser.add_argument('--sample_dir', type=str, default='cyclegan/pokemon_water_fire')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/test_cats')
+    parser.add_argument('--sample_dir', type=str, default='cyclegan/cats')
     parser.add_argument('--log_step', type=int , default=10)
     parser.add_argument('--sample_every', type=int , default=100)
     parser.add_argument('--checkpoint_every', type=int , default=800)

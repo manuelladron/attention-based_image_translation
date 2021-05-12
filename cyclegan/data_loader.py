@@ -42,7 +42,6 @@ def get_data_loader(data_path, opts):
         transform = basic_transform
 
     elif opts.data_aug == 'deluxe':
-        # todo: add your code here: below are some ideas for your reference
         load_size = int(1.1 * opts.image_size)
         osize = [load_size, load_size]
 
@@ -57,8 +56,8 @@ def get_data_loader(data_path, opts):
         ])
         transform = deluxe_transform
 
-
     dataset = CustomDataSet(os.path.join('data/', data_path), opts.ext, transform)
+    print('dataset: ', dataset)
     dloader = DataLoader(dataset=dataset, batch_size=opts.batch_size, shuffle=True, num_workers=opts.num_workers)
     print(f'\nDataloader with {opts.data_aug}, length: {len(dloader)}')
 

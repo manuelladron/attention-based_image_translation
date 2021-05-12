@@ -4,7 +4,83 @@ import torch
 import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
-from ..sagan.spectral import *
+from spectral import *
+import time
+from skimage.transform import rescale, resize, downscale_local_mean
+import pdb
+import math
+import numbers
+from blurpool import BlurPool
+torch.set_printoptions(edgeitems=15)
+
+
+class GaussianSmoothing(nn.Module):
+    """
+    Apply gaussian smoothing on a
+    1d, 2d or 3d tensor. Filtering is performed seperately for each channel
+    in the input using a depthwise convolution.
+    Arguments:
+        channels (int, sequence): Number of channels of the input tensors. Output will
+            have this number of channels as well.
+        kernel_size (int, sequence): Size of the gaussian kernel.
+        sigma (float, sequence): Standard deviation of the gaussian kernel.
+        dim (int, optional): The number of dimensions of the data.
+            Default value is 2 (spatial).
+    """
+    def __init__(self, channels, kernel_size, sigma, dim=2):
+        super(GaussianSmoothing, self).__init__()
+        if isinstance(kernel_size, numbers.Number):
+            kernel_size = [kernel_size] * dim
+        if isinstance(sigma, numbers.Number):
+            sigma = [sigma] * dim
+
+        # The gaussian kernel is the product of the
+        # gaussian function of each dimension.
+        kernel = 1
+        meshgrids = torch.meshgrid(
+            [
+                torch.arange(size, dtype=torch.float32)
+                for size in kernel_size
+            ]
+        )
+
+        for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
+            mean = (size - 1) / 2
+            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * \
+                      torch.exp(-((mgrid - mean) / (2 * std)) ** 2)
+
+        # Make sure sum of values in gaussian kernel equals 1.
+        kernel = kernel / torch.sum(kernel)
+
+        # Reshape to depthwise convolutional weight
+        kernel = kernel.view(1, 1, *kernel.size())
+        kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
+
+        self.register_buffer('weight', kernel)
+        self.groups = channels
+
+        if dim == 1:
+            self.conv = F.conv1d
+        elif dim == 2:
+            self.conv = F.conv2d
+        elif dim == 3:
+            self.conv = F.conv3d
+        else:
+            raise RuntimeError(
+                'Only 1, 2 and 3 dimensions are supported. Received {}.'.format(dim)
+            )
+
+    def forward(self, input):
+        """
+        Apply gaussian filter to input.
+        Arguments:
+            input (torch.Tensor): Input to apply gaussian filter on.
+        Returns:
+            filtered (torch.Tensor): Filtered output.
+        """
+        return self.conv(input, weight=self.weight, groups=self.groups)
+
+
 
 
 class Self_Attn(nn.Module):
@@ -27,10 +103,19 @@ class Self_Attn(nn.Module):
             returns :
                 out : self attention value + input feature
                 attention: B * N * N (N is Width*Height)
+                output does not change the input shape
         """
+        # print('----SELF ATTENTION------')
+        # print('input: ', x.shape)
         m_batchsize, C, width, height = x.size()
 
+        # print('batch: ', m_batchsize)
+        # print('C: ', C)
+        # print('width: ', width)
+        # print('height: ', height)
+
         proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)  # B * N * C
+        #print('proj query: ', proj_query.shape)
         proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)  # B * C * N
         energy = torch.bmm(proj_query, proj_key)  # batch matrix-matrix product
 
@@ -102,7 +187,6 @@ class DCGenerator(nn.Module):
             ------
                 out: BS x channels x image_width x image_height  -->  16x3x32x32
         """
-
         ###########################################
         ##   FILL THIS IN: FORWARD PASS   ##
         ###########################################
@@ -125,7 +209,6 @@ class ResnetBlock(nn.Module):
         return out
 
 
-
 class CycleGenerator(nn.Module):
     """Defines the architecture of the generator network.
        Note: Both generators G_XtoY and G_YtoX have the same architecture in this assignment.
@@ -139,38 +222,132 @@ class CycleGenerator(nn.Module):
 
         # 1. Define the encoder part of the generator (that extracts features from the input image)
         self.conv1 = conv(in_channels=3, out_channels=32, kernel_size=4, stride=2, padding=1, norm=norm)
+        self.g1 = BlurPool(32)
+        self.a1 = Self_Attn(32)
+        self.gd1 = deconv(32, 32, 4, stride=2, padding=1, norm='instance')
+
         self.conv2 = conv(in_channels=32, out_channels=64, kernel_size=4, stride=2, padding=1, norm=norm)
+        self.g2 = BlurPool(64)
+        self.a2 = Self_Attn(64)
+        self.gd2 = deconv(64, 64, 4, stride=2, padding=1, norm='instance')
 
         # 2. Define the transformation part of the generator
         self.resnet_block = ResnetBlock(conv_dim=64, norm=norm)
+        self.gb1 = BlurPool(64)
+        self.ab1 = Self_Attn(64)
+        self.gdb1 = deconv(64, 64, 4, stride=2, padding=1, norm='instance')
+
         self.resnet_block2 = ResnetBlock(conv_dim=64, norm=norm)
+        self.gb2 = BlurPool(64)
+        self.ab2 = Self_Attn(64)
+        self.gdb2 = deconv(64, 64, 4, stride=2, padding=1, norm='instance')
+
         self.resnet_block3 = ResnetBlock(conv_dim=64, norm=norm)
+        self.gb3 = BlurPool(64)
+        self.ab3 = Self_Attn(64)
+        self.gdb3 = deconv(64, 64, 4, stride=2, padding=1, norm='instance')
 
         # 3. Define the decoder part of the generator (that builds up the output image from features)
         self.deconv1 = deconv(64, 32, 4, stride=2, padding=1, norm='instance')
+        self.g3 = BlurPool(32)
+        self.ad1 = Self_Attn(32)
+        self.gd3 = deconv(32, 32, 4, stride=2, padding=1, norm='instance')
+
         self.deconv2 = deconv(32, 3, 4, stride=2, padding=1, norm='instance')
+        self.g4 = BlurPool(3)
+        self.ad2 = Self_Attn(3)
+        self.gd4 = deconv(3, 3, 4, stride=2, padding=1, norm='instance')
+
 
     def forward(self, x):
         """Generates an image conditioned on an input image.
 
             Input
             -----
-                x: BS x 3 x 32 x 32
+                x: BS x 3 x 64 x 64
 
             Output
             ------
-                out: BS x 3 x 32 x 32
+                out: BS x 3 x 64 x 64
         """
+        # print('----CycleGan Generator Forward----')
+        # print('input: ', x.shape)
+        st = time.time()
+        print('input: ', x.shape)
+        out = F.relu(self.conv1(x))    # [BATCH, C=32, W=32, H=32]
+        print('1st conv time: ', time.time()-st)
+        st_at = time.time()
+        out = self.g1(out)
+        print('shape after g1: ', out.shape)
+        out, att = self.a1(out)
+        print('shape after a1: ', out.shape)
+        out = self.gd1(out)
+        print('shape after gd1: ', out.shape)
 
-        out = F.relu(self.conv1(x))
-        out = F.relu(self.conv2(out))
+        print('\nAtt 1st conv time: ', time.time() - st_at)
+        #print('att shape: ', att.shape)
+        #pdb.set_trace()
+        #print('1st conv layer: ', out.shape)
+        out = F.relu(self.conv2(out))  # [BATCH, C=64, W=16, H=16]
+        print('2nd conv shape: ', out.shape)
+        out = self.g2(out)
+        print('g2: ', out.shape)
+        out, att = self.a2(out)
+        print('att2 shape: ', att.shape)
+        print('a2 shape: ', out.shape)
+        out = self.gd2(out)
+        print('gd2 shape: ', out.shape)
 
-        out = F.relu(self.resnet_block(out))
-        out = F.relu(self.resnet_block2(out))
-        out = F.relu(self.resnet_block3(out))
+        #print('2nd conv layer: ', out.shape)
+        out = F.relu(self.resnet_block(out))  # [BATCH, C=64, W=16, H=16]
+        print('res1: ', out.shape)
+        out = self.gb1(out)
+        print('gb1: ', out.shape)
+        out, att = self.ab1(out)
+        print('att shape: ', att.shape)
+        print('att res1: ', out.shape)
+        out = self.gdb1(out)
+        print('deconv res1: ', out.shape)
 
-        out = F.relu(self.deconv1(out))
-        out = F.tanh(self.deconv2(out))
+        #print('resnet block 1 layer: ', out.shape)
+        out = F.relu(self.resnet_block2(out)) # [BATCH, C=64, W=16, H=16]
+        print('res2: ', out.shape)
+        out = self.gb2(out)
+        print('gb2: ', out.shape)
+        out, att = self.ab2(out)
+        print('att res2: ', out.shape)
+        out = self.gdb2(out)
+        print('deconv res2: ', out.shape)
+
+
+        #print('resnet block 2 layer: ', out.shape)
+        out = F.relu(self.resnet_block3(out)) # [BATCH, C=64, W=16, H=16]
+        print('resnet block 3 layer: ', out.shape)
+        out = self.gb3(out)
+        print('gb3: ', out.shape)
+        out, att = self.ab3(out)
+        print('att res3: ', out.shape)
+        out = self.gdb3(out)
+        print('deconv res3: ', out.shape)
+
+
+        out = F.relu(self.deconv1(out))       # [BATCH, C=32, W=32, H=32]
+        print('1st deconv layer: ', out.shape)
+        out = self.g3(out)
+        print('g3: ', out.shape)
+        out, att = self.ad1(out)
+        print('att deconv1: ', out.shape)
+        out = self.gd3(out)
+        print('deconv deconv1: ', out.shape)
+
+        out = F.tanh(self.deconv2(out))       # [BATCH, C=3, W=64, H=64]
+        print('last deconv layer: ', out.shape)
+        out = self.g4(out)
+        print('g4: ', out.shape)
+        out, att = self.ad2(out)
+        print('att deconv2: ', out.shape)
+        out = self.gd4(out)
+        print('deconv deconv2: ', out.shape)
 
         return out
 
@@ -198,6 +375,7 @@ class DCDiscriminator(nn.Module):
                           init_zero_weights=False, spectral=spectral)
 
     def forward(self, x):
+
         out = F.relu(self.conv1(x))
 
         ###########################################
@@ -233,20 +411,20 @@ class PatchDiscriminator(nn.Module):
         self.conv5 = conv(in_channels=ndf*8, out_channels=1, kernel_size=4, stride=2, padding=0, norm=None,
                           init_zero_weights=False, spectral=spectral)
 
-    def forward(self, x):
-        #print('PatchGAN')
-        out = F.relu(self.conv1(x))
+    def forward(self, x):                                 # input [batch, 3, 64, 64]
+        print('PatchGAN')
+        out = F.relu(self.conv1(x))                       # [batch, 64, 32, 32]
         #print('1st layer: ', out.shape)
         ###########################################
         ##   FILL THIS IN: FORWARD PASS   ##
         ###########################################
-        out = F.leaky_relu(self.conv2(out), 0.2, True)
+        out = F.leaky_relu(self.conv2(out), 0.2, True)    # [batch, 128, 16, 16]
         #print('2nd layer: ', out.shape)
-        out = F.leaky_relu(self.conv3(out), 0.2, True)
+        out = F.leaky_relu(self.conv3(out), 0.2, True)    # [batch, 256, 8, 8]
         #print('3rd layer: ', out.shape)
-        out = F.leaky_relu(self.conv4(out), 0.2, True)
+        out = F.leaky_relu(self.conv4(out), 0.2, True)    # [batch, 512, 4, 4]
         #print('4th layer: ', out.shape)
-        out = self.conv5(out).squeeze()
+        out = self.conv5(out).squeeze()                   # [batch]
         #print('5th layer: ', out.shape)
 
         return out 
