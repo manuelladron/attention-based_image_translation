@@ -283,26 +283,29 @@ class CycleGeneratorViT(nn.Module):
     def __init__(self, patch_dim, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
         super(CycleGeneratorViT, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=embed_dim//4, kernel_size=4, stride=2, padding=1)
-        self.in_c1 = nn.InstanceNorm2d(embed_dim//4)
-        self.conv2 = nn.Conv2d(in_channels=embed_dim//4, out_channels=embed_dim//2, kernel_size=4, stride=2, padding=1)
-        self.in_c2 = nn.InstanceNorm2d(embed_dim//2)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=embed_dim // 4, kernel_size=4, stride=2, padding=1)
+        self.in_c1 = nn.InstanceNorm2d(embed_dim // 4)
+        self.conv2 = nn.Conv2d(in_channels=embed_dim // 4, out_channels=embed_dim // 2, kernel_size=4, stride=2,
+                               padding=1)
+        self.in_c2 = nn.InstanceNorm2d(embed_dim // 2)
 
-        self.conv_down = nn.Conv2d(in_channels=embed_dim//2, out_channels=embed_dim, kernel_size=patch_size,
+        self.conv_down = nn.Conv2d(in_channels=embed_dim // 2, out_channels=embed_dim, kernel_size=patch_size,
                                    stride=patch_size)
 
         self.blocks = [ViTBlock(embed_dim=embed_dim, patch_dim=patch_dim, num_heads=num_heads) for _ in range(transform_layers)]
         self.blocks = nn.ModuleList(self.blocks)
 
-        self.deconv_up = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim//2, kernel_size=patch_size,
-                                         stride=patch_size)
+        self.deconv_up = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim // 2, kernel_size=patch_size,
+                                            stride=patch_size)
 
-        self.deconv_1 = nn.ConvTranspose2d(in_channels=embed_dim//2, out_channels=embed_dim//4, kernel_size=4, stride=2, padding=1)
+        self.deconv_1 = nn.ConvTranspose2d(in_channels=embed_dim // 2, out_channels=embed_dim // 4, kernel_size=4,
+                                           stride=2, padding=1)
         self.in_d1 = nn.InstanceNorm2d(embed_dim // 4)
-        self.deconv_2 = nn.ConvTranspose2d(in_channels=embed_dim//4, out_channels=embed_dim//4, kernel_size=4, stride=2, padding=1)
+        self.deconv_2 = nn.ConvTranspose2d(in_channels=embed_dim // 4, out_channels=embed_dim // 4, kernel_size=4,
+                                           stride=2, padding=1)
         self.in_d2 = nn.InstanceNorm2d(embed_dim // 4)
 
-        self.conv_out = nn.Conv2d(in_channels=embed_dim//4, out_channels=3, kernel_size=4, stride=1, padding=1)
+        self.conv_out = nn.Conv2d(in_channels=embed_dim // 4, out_channels=3, kernel_size=3, stride=1, padding=1)
 
 
     def forward(self, x):
@@ -370,45 +373,31 @@ class CycleGeneratorMixer(nn.Module):
         out = x
 
         out = self.conv1(out)
-        print(out.shape)
         out = self.in_c1(out)
-        print(out.shape)
         out = F.relu(out)
 
         out = self.conv2(out)
-        print(out.shape)
         out = self.in_c2(out)
-        print(out.shape)
         out = F.relu(out)
 
         out = self.conv_down(out)
-        print(out.shape)
         patch_h, patch_w = out.shape[2], out.shape[3]
         out = out.view(out.shape[0], out.shape[1], -1)
-        print(out.shape)
         for b in self.blocks:
             out = b(out)
-            print(out.shape)
         out = out.view(out.shape[0], out.shape[1], patch_h, patch_w)
-        print(out.shape)
         out = self.deconv_up(out)
-        print(out.shape)
         out = F.relu(out)
 
         out = self.deconv_1(out)
-        print(out.shape)
         out = self.in_d1(out)
-        print(out.shape)
         out = F.relu(out)
 
         out = self.deconv_2(out)
-        print(out.shape)
         out = self.in_d2(out)
-        print(out.shape)
         out = F.relu(out)
 
         out = self.conv_out(out)
-        print(out.shape)
 
         out = F.tanh(out)
         return out

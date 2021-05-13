@@ -491,6 +491,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         if iteration % opts.checkpoint_every == 0:
             checkpoint(iteration, G_XtoY, G_YtoX, D_X, D_Y, opts)
 
+        del D_X_loss
+        del D_Y_loss
+        del g_loss
+        del gY_loss
+        del gX_loss
+
 
 def main(opts):
     """Loads the data, creates checkpoint and sample directories, and starts the training loop.
