@@ -364,7 +364,7 @@ class CycleGeneratorMixer(nn.Module):
                                            stride=2, padding=1)
         self.in_d2 = nn.InstanceNorm2d(embed_dim // 4)
 
-        self.conv_out = nn.Conv2d(in_channels=embed_dim // 4, out_channels=3, kernel_size=4, stride=1, padding=1)
+        self.conv_out = nn.Conv2d(in_channels=embed_dim // 4, out_channels=3, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         out = x
