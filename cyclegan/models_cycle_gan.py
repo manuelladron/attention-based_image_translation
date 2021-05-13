@@ -527,7 +527,7 @@ class PatchDiscriminator(nn.Module):
                           init_zero_weights=False, spectral=spectral)
 
     def forward(self, x):                                 # input [batch, 3, 64, 64]
-        print('PatchGAN')
+        # print('PatchGAN')
         out = F.relu(self.conv1(x))                       # [batch, 64, 32, 32]
         #print('1st layer: ', out.shape)
         ###########################################
