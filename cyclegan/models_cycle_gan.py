@@ -233,7 +233,9 @@ class ViTBlock(nn.Module):
     def forward(self, x):
         skip = x
         x = self.ln1(x)
+        x = torch.transpose(x, 1, 2)
         x = self.mha(x, x, x)
+        x = torch.transpose(x, 1, 2)
         x = x + skip
         skip = x
         x = self.ln2(x)
@@ -311,7 +313,6 @@ class CycleGeneratorMixer(nn.Module):
 
     def forward(self, x):
         out = x
-        print("Input Shape: {}".format(out.shape))
         out = self.conv(out)
         patch_h, patch_w = out.shape[2], out.shape[3]
         out = out.view(out.shape[0], out.shape[1], -1)
