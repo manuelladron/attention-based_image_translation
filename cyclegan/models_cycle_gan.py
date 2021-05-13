@@ -370,31 +370,45 @@ class CycleGeneratorMixer(nn.Module):
         out = x
 
         out = self.conv1(out)
+        print(out.shape)
         out = self.in_c1(out)
+        print(out.shape)
         out = F.relu(out)
 
         out = self.conv2(out)
+        print(out.shape)
         out = self.in_c2(out)
+        print(out.shape)
         out = F.relu(out)
 
         out = self.conv_down(out)
+        print(out.shape)
         patch_h, patch_w = out.shape[2], out.shape[3]
         out = out.view(out.shape[0], out.shape[1], -1)
+        print(out.shape)
         for b in self.blocks:
             out = b(out)
+            print(out.shape)
         out = out.view(out.shape[0], out.shape[1], patch_h, patch_w)
+        print(out.shape)
         out = self.deconv_up(out)
+        print(out.shape)
         out = F.relu(out)
 
         out = self.deconv_1(out)
+        print(out.shape)
         out = self.in_d1(out)
+        print(out.shape)
         out = F.relu(out)
 
         out = self.deconv_2(out)
+        print(out.shape)
         out = self.in_d2(out)
+        print(out.shape)
         out = F.relu(out)
 
         out = self.conv_out(out)
+        print(out.shape)
 
         out = F.tanh(out)
         return out
