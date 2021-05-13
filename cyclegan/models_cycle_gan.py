@@ -221,9 +221,9 @@ class SelfAttention(nn.Module):
 class ViTBlock(nn.Module):
     def __init__(self, embed_dim, num_heads=8):
         super(ViTBlock, self).__init__()
-        self.ln1 = nn.LayerNorm(embed_dim)
+        self.ln1 = nn.LayerNorm()
         self.mha = nn.MultiheadAttention(embed_dim=embed_dim, bias=False, num_heads=num_heads)
-        self.ln2 = nn.LayerNorm(embed_dim)
+        self.ln2 = nn.LayerNorm()
         self.gelu = nn.GELU()
 
         # using conv1d with kernel_size=1 is like applying a linear layer to the channel dim
@@ -247,13 +247,13 @@ class ViTBlock(nn.Module):
 class MixerBlock(nn.Module):
     def __init__(self, embed_dim):
         super(MixerBlock, self).__init__()
-        self.ln1 = nn.LayerNorm(embed_dim)
+        self.ln1 = nn.LayerNorm()
 
         self.dense1 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
         self.gelu1 = nn.GELU()
         self.dense2 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
 
-        self.ln2 = nn.LayerNorm(embed_dim)
+        self.ln2 = nn.LayerNorm()
 
         # using conv1d with kernel_size=1 is like applying a linear layer to the channel dim
         self.conv1 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
