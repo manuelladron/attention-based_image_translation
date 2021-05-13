@@ -312,6 +312,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         fake_X = G_YtoX(images_Y)
         #fake_X = DiffAugment(fake_X, policy='translation,cutout')
         label_fake_x = torch.zeros(bs_y, dtype=torch.float, device=device)
+        label_fake_x = torch.unsqueeze(label_fake_x, dim=-1)
+        label_fake_x = torch.unsqueeze(label_fake_x, dim=-1)
         
         # 3. Compute the loss for D_X
         # D_X_loss = torch.nn.functional.mse_loss(D_X(fake_X.detach()), label_fake_x, reduce='mean')# / bs_y
@@ -321,6 +323,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         fake_Y = G_XtoY(images_X)
         #fake_Y = DiffAugment(fake_Y, policy='translation,cutout')
         label_fake_y = torch.zeros(bs_x, dtype=torch.float, device=device)
+        label_fake_y = torch.unsqueeze(label_fake_y, dim=-1)
+        label_fake_y = torch.unsqueeze(label_fake_y, dim=-1)
         
         # 5. Compute the loss for D_Y
         # D_Y_loss = torch.nn.functional.mse_loss(D_Y(fake_Y.detach()), label_fake_y, reduce='mean')# / bs_x
