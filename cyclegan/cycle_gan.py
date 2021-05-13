@@ -580,7 +580,7 @@ if __name__ == '__main__':
 
     opts.sample_dir += "_patch_{}_blocks_{}".format(opts.patch, opts.blocks)
 
-    opts.patch_dim = (opts.image_size // opts.patch // 16) ** 2
+    opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2
 
     if os.path.exists(opts.sample_dir):
         cmd = 'rm %s/*' % opts.sample_dir
