@@ -97,8 +97,8 @@ def create_model(opts):
         G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, patch_dim=opts.patch_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
 
     elif opts.gen=="mix":
-        G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks, patch_size=opts.patch)
-        G_YtoX = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, patch_dim=opts.patch_dim, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_YtoX = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, patch_dim=opts.patch_dim, transform_layers=opts.blocks, patch_size=opts.patch)
 
 
     model_dict = {'dc': DCDiscriminator}
