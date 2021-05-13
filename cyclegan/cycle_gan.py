@@ -93,12 +93,12 @@ def create_model(opts):
         G_YtoX = CycleGenerator(conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
 
     elif opts.gen=="vit":
-        G_XtoY = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks)
-        G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks)
+        G_XtoY = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
 
     elif opts.gen=="mix":
-        G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks)
-        G_YtoX = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks)
+        G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_YtoX = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks, patch_size=opts.patch)
 
 
     model_dict = {'dc': DCDiscriminator}
@@ -544,7 +544,9 @@ def create_parser():
 
     parser.add_argument('--gpu', type=str, default='0')
 
-    parser.add_argument('--blocks', type=int, default=4)
+    parser.add_argument('--blocks', type=int, default=3)
+
+    parser.add_argument('--patch', type=int, default=16)
 
     return parser
 

@@ -288,8 +288,13 @@ class CycleGeneratorViT(nn.Module):
 
     def forward(self, x):
         out = x
+        out = self.conv(out)
+        patch_h, patch_w = out.shape[2], out.shape[3]
+        out = out.view(out.shape[0], out.shape[1], -1)
         for b in self.blocks:
             out = b(out)
+        out = out.view(out.shape[0], out.shape[1], patch_h, patch_w)
+        out = self.deconv(out)
         out = F.tanh(out)
         return out
 
@@ -304,8 +309,14 @@ class CycleGeneratorMixer(nn.Module):
 
     def forward(self, x):
         out = x
+        print("Input Shape: {}".format(out.shape))
+        out = self.conv(out)
+        patch_h, patch_w = out.shape[2], out.shape[3]
+        out = out.view(out.shape[0], out.shape[1], -1)
         for b in self.blocks:
             out = b(out)
+        out = out.view(out.shape[0], out.shape[1], patch_h, patch_w)
+        out = self.deconv(out)
         out = F.tanh(out)
         return out
 
