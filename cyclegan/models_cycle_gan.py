@@ -249,9 +249,9 @@ class MixerBlock(nn.Module):
         super(MixerBlock, self).__init__()
         self.ln1 = nn.LayerNorm([embed_dim, patch_dim])
 
-        self.dense1 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=True)
+        self.dense1 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=False)
         self.gelu1 = nn.GELU()
-        self.dense2 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=True)
+        self.dense2 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=False)
 
         self.ln2 = nn.LayerNorm([embed_dim, patch_dim])
 
@@ -282,6 +282,7 @@ class CycleGeneratorViT(nn.Module):
         super(CycleGeneratorViT, self).__init__()
         self.conv = nn.Conv2d(in_channels=3, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
         self.blocks = [ViTBlock(embed_dim=embed_dim, patch_dim=patch_dim, num_heads=num_heads) for _ in range(transform_layers)]
+        self.blocks = nn.ModuleList(self.blocks)
         self.deconv = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=3, kernel_size=patch_size,
                                          stride=patch_size)
 
@@ -304,6 +305,7 @@ class CycleGeneratorMixer(nn.Module):
         super(CycleGeneratorMixer, self).__init__()
         self.conv = nn.Conv2d(in_channels=3, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
         self.blocks = [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
+        self.blocks = nn.ModuleList(self.blocks)
         self.deconv = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=3, kernel_size=patch_size,
                                          stride=patch_size)
 
