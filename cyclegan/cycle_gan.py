@@ -353,7 +353,6 @@ def training_loop(dataloader_X, dataloader_Y, opts):
 
         # 1. Generate fake images that look like domain X based on real images in domain Y
         fake_X = G_YtoX(images_Y)
-        print(fake_X.shape)
         #fake_X = DiffAugment(fake_X, policy='translation,cutout')
 
         if opts.label_smooth:
