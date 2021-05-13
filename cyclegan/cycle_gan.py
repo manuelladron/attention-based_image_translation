@@ -281,8 +281,10 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             label_real_x = torch.ones(bs_x, dtype=torch.float, device=device)
             label_real_y = torch.ones(bs_y, dtype=torch.float, device=device)
             
-        D_X_loss = torch.nn.functional.mse_loss(D_X(images_X), label_real_x, reduce='mean')# / bs_x
-        D_Y_loss = torch.nn.functional.mse_loss(D_Y(images_Y), label_real_y, reduce='mean')# / bs_y
+        # D_X_loss = torch.nn.functional.mse_loss(D_X(images_X), label_real_x, reduce='mean')# / bs_x
+        D_X_loss = torch.mean(torch.square(D_X(images_X) - label_real_x))
+        # D_Y_loss = torch.nn.functional.mse_loss(D_Y(images_Y), label_real_y, reduce='mean')# / bs_y
+        D_Y_loss = torch.mean(torch.square(D_Y(images_Y) - label_real_y))
 
         d_real_loss = D_X_loss + D_Y_loss
         d_real_loss.backward()
@@ -306,7 +308,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         label_fake_x = torch.zeros(bs_y, dtype=torch.float, device=device)
         
         # 3. Compute the loss for D_X
-        D_X_loss = torch.nn.functional.mse_loss(D_X(fake_X.detach()), label_fake_x, reduce='mean')# / bs_y
+        # D_X_loss = torch.nn.functional.mse_loss(D_X(fake_X.detach()), label_fake_x, reduce='mean')# / bs_y
+        D_X_loss = torch.mean(torch.square(D_X(fake_X) - label_fake_x))
         
         # 4. Generate fake images that look like domain Y based on real images in domain X
         fake_Y = G_XtoY(images_X)
@@ -314,7 +317,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         label_fake_y = torch.zeros(bs_x, dtype=torch.float, device=device)
         
         # 5. Compute the loss for D_Y
-        D_Y_loss = torch.nn.functional.mse_loss(D_Y(fake_Y.detach()), label_fake_y, reduce='mean')# / bs_x
+        # D_Y_loss = torch.nn.functional.mse_loss(D_Y(fake_Y.detach()), label_fake_y, reduce='mean')# / bs_x
+        D_Y_loss = torch.mean(torch.square(D_Y(fake_Y) - label_fake_y))
 
         d_fake_loss = D_X_loss + D_Y_loss
 
@@ -347,7 +351,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             label_fake_x = torch.ones(bs_y, dtype=torch.float, device=device)
         
         # 2. Compute the generator loss based on domain X
-        gY_loss = torch.nn.functional.mse_loss(D_X(fake_X), label_fake_x, reduce='mean')# / bs_y
+        # gY_loss = torch.nn.functional.mse_loss(D_X(fake_X), label_fake_x, reduce='mean')# / bs_y
+        gY_loss = torch.mean(torch.square(D_X(fake_X) - label_fake_x))
         logger.add_scalar('G/XY/fake', gY_loss, iteration)
 
         if opts.use_cycle_consistency_loss:
@@ -376,7 +381,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             label_fake_y = torch.ones(bs_x, dtype=torch.float, device=device)
         
         # 2. Compute the generator loss based on domain Y
-        gX_loss = torch.nn.functional.mse_loss(D_Y(fake_Y), label_fake_y, reduce='mean') #/ bs_x
+        # gX_loss = torch.nn.functional.mse_loss(D_Y(fake_Y), label_fake_y, reduce='mean') #/ bs_x
+        gX_loss = torch.mean(torch.square(D_Y(fake_Y) - label_fake_y))
         logger.add_scalar('G/YX/fake', gX_loss, iteration)
 
         if opts.use_cycle_consistency_loss:
