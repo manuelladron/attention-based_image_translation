@@ -234,7 +234,7 @@ class ViTBlock(nn.Module):
         skip = x
         x = self.ln1(x)
         x = torch.transpose(x, 1, 2)
-        x = self.mha(x, x, x)
+        x = self.mha(x, x, x, need_weights=False)
         x = torch.transpose(x, 1, 2)
         x = x + skip
         skip = x
