@@ -288,8 +288,6 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         label_real_y = torch.unsqueeze(label_real_y, dim=-1)
 
         # D_X_loss = torch.nn.functional.mse_loss(D_X(images_X), label_real_x, reduce='mean')# / bs_x
-        print(label_real_x.shape)
-        print(D_X(images_X).shape)
         D_X_loss = torch.mean(torch.square(D_X(images_X) - label_real_x))
         # D_Y_loss = torch.nn.functional.mse_loss(D_Y(images_Y), label_real_y, reduce='mean')# / bs_y
         D_Y_loss = torch.mean(torch.square(D_Y(images_Y) - label_real_y))
@@ -357,6 +355,9 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             label_fake_x = torch.FloatTensor(bs_y).uniform_(0.8, 0.9).to(device)
         else:
             label_fake_x = torch.ones(bs_y, dtype=torch.float, device=device)
+
+        label_fake_x = torch.unsqueeze(label_fake_x, dim=-1)
+        label_fake_x = torch.unsqueeze(label_fake_x, dim=-1)
         
         # 2. Compute the generator loss based on domain X
         # gY_loss = torch.nn.functional.mse_loss(D_X(fake_X), label_fake_x, reduce='mean')# / bs_y
@@ -387,6 +388,9 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             label_fake_y = torch.FloatTensor(bs_x).uniform_(0.8, 0.9).to(device)
         else:
             label_fake_y = torch.ones(bs_x, dtype=torch.float, device=device)
+
+        label_fake_y = torch.unsqueeze(label_fake_y, dim=-1)
+        label_fake_y = torch.unsqueeze(label_fake_y, dim=-1)
         
         # 2. Compute the generator loss based on domain Y
         # gX_loss = torch.nn.functional.mse_loss(D_Y(fake_Y), label_fake_y, reduce='mean') #/ bs_x
