@@ -260,8 +260,8 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         #images_X = DiffAugment(images_X, policy='translation,cutout')
         #images_Y = DiffAugment(images_Y, policy='translation,cutout')
         
-        bs_x = (images_X.shape[0], 1, 1)
-        bs_y = (images_Y.shape[0], 1, 1)
+        bs_x = images_X.shape[0]
+        bs_y = images_Y.shape[0]
 
         # ============================================
         #            TRAIN THE DISCRIMINATORS
@@ -280,6 +280,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         else:
             label_real_x = torch.ones(bs_x, dtype=torch.float, device=device)
             label_real_y = torch.ones(bs_y, dtype=torch.float, device=device)
+
+        label_real_x = torch.unsqueeze(label_real_x, dim=-1)
+        label_real_x = torch.unsqueeze(label_real_x, dim=-1)
+
+        label_real_y = torch.unsqueeze(label_real_y, dim=-1)
+        label_real_y = torch.unsqueeze(label_real_y, dim=-1)
 
         # D_X_loss = torch.nn.functional.mse_loss(D_X(images_X), label_real_x, reduce='mean')# / bs_x
         print(label_real_x.shape)
