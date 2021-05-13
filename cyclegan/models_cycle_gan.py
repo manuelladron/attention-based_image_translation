@@ -249,9 +249,9 @@ class MixerBlock(nn.Module):
         super(MixerBlock, self).__init__()
         self.ln1 = nn.LayerNorm([embed_dim, patch_dim])
 
-        self.dense1 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
+        self.dense1 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=False)
         self.gelu1 = nn.GELU()
-        self.dense2 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
+        self.dense2 = nn.Linear(in_features=patch_dim, out_features=patch_dim, bias=False)
 
         self.ln2 = nn.LayerNorm([embed_dim, patch_dim])
 
