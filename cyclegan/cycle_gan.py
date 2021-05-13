@@ -283,6 +283,7 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             
         # D_X_loss = torch.nn.functional.mse_loss(D_X(images_X), label_real_x, reduce='mean')# / bs_x
         print(label_real_x.shape)
+        print(D_X(images_X).shape)
         D_X_loss = torch.mean(torch.square(D_X(images_X) - label_real_x))
         # D_Y_loss = torch.nn.functional.mse_loss(D_Y(images_Y), label_real_y, reduce='mean')# / bs_y
         D_Y_loss = torch.mean(torch.square(D_Y(images_Y) - label_real_y))
