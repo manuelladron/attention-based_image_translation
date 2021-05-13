@@ -42,6 +42,7 @@ import numpy as np
 import utils
 from data_loader import get_data_loader
 from models_cycle_gan import CycleGenerator, DCDiscriminator, PatchDiscriminator, weights_init
+from models_cycle_gan import CycleGeneratorViT, CycleGeneratorMixer
 from diff_aug import DiffAugment
 
 SEED = 11
@@ -83,9 +84,22 @@ def print_models(G_XtoY, G_YtoX, D_X, D_Y):
 def create_model(opts):
     """Builds the generators and discriminators.
     """
-    model_dict = {'cycle': CycleGenerator}
-    G_XtoY = model_dict[opts.gen](conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
-    G_YtoX = model_dict[opts.gen](conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
+    model_dict = {'cycle': CycleGenerator,
+                  'vit': CycleGeneratorViT,
+                  'mix': CycleGeneratorMixer}
+
+    if opts.gen=="cycle":
+        G_XtoY = CycleGenerator(conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
+        G_YtoX = CycleGenerator(conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
+
+    elif opts.gen=="vit":
+        G_XtoY = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks)
+        G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks)
+
+    elif opts.gen=="mix":
+        G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks)
+        G_YtoX = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks)
+
 
     model_dict = {'dc': DCDiscriminator}
     if opts.patch_disc:
@@ -151,11 +165,13 @@ def save_samples(iteration, fixed_Y, fixed_X, G_YtoX, G_XtoY, opts):
     Y, fake_Y = utils.to_data(fixed_Y), utils.to_data(fake_Y)
 
     merged = merge_images(X, fake_Y, opts)
+    logger.add_image("Fake_Y", img_tensor=(merged+1)/2, global_step=iteration, dataformats="HWC")
     path = os.path.join(opts.sample_dir, 'sample-{:06d}-X-Y.png'.format(iteration))
     imageio.imwrite(path, merged)
     print('Saved {}'.format(path))
 
     merged = merge_images(Y, fake_X, opts)
+    logger.add_image("Fake_X", img_tensor=(merged+1)/2, global_step=iteration, dataformats="HWC")
     path = os.path.join(opts.sample_dir, 'sample-{:06d}-Y-X.png'.format(iteration))
     imageio.imwrite(path, merged)
     print('Saved {}'.format(path))
@@ -528,6 +544,8 @@ def create_parser():
 
     parser.add_argument('--gpu', type=str, default='0')
 
+    parser.add_argument('--blocks', type=int, default=4)
+
     return parser
 
 
@@ -544,9 +562,12 @@ if __name__ == '__main__':
     if opts.use_cycle_consistency_loss:
         opts.sample_dir += '_cycle'
 
+    # opts.sample_dir += opts.gen_type
+
     if os.path.exists(opts.sample_dir):
         cmd = 'rm %s/*' % opts.sample_dir
         os.system(cmd)
+
 
     logger = SummaryWriter(opts.sample_dir)
 

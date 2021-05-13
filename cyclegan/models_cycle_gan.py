@@ -209,6 +209,107 @@ class ResnetBlock(nn.Module):
         return out
 
 
+class SelfAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads=8):
+        super(SelfAttention, self).__init__()
+        self.mha = nn.MultiheadAttention(embed_dim=embed_dim, bias=False, num_heads=num_heads)
+
+    def forward(self, x):
+        return self.mha(x, x, x)
+
+
+class ViTBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads=8):
+        super(ViTBlock, self).__init__()
+        self.ln1 = nn.LayerNorm(embed_dim)
+        self.mha = nn.MultiheadAttention(embed_dim=embed_dim, bias=False, num_heads=num_heads)
+        self.ln2 = nn.LayerNorm(embed_dim)
+        self.gelu = nn.GELU()
+
+        # using conv1d with kernel_size=1 is like applying a linear layer to the channel dim
+        self.conv1 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        skip = x
+        x = self.ln1(x)
+        x = self.mha(x, x, x)
+        x = x + skip
+        skip = x
+        x = self.ln2(x)
+        x = self.conv1(x)
+        x = self.gelu(x)
+        x = self.conv2(x)
+        x = x + skip
+        return x
+
+
+class MixerBlock(nn.Module):
+    def __init__(self, embed_dim):
+        super(MixerBlock, self).__init__()
+        self.ln1 = nn.LayerNorm(embed_dim)
+
+        self.dense1 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
+        self.gelu1 = nn.GELU()
+        self.dense2 = nn.Linear(in_features=embed_dim, out_features=embed_dim, bias=False)
+
+        self.ln2 = nn.LayerNorm(embed_dim)
+
+        # using conv1d with kernel_size=1 is like applying a linear layer to the channel dim
+        self.conv1 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
+        self.gelu2 = nn.GELU()
+        self.conv2 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        skip = x
+        x = self.ln1(x)
+        x = self.dense1(x)
+        x = self.gelu1(x)
+        x = self.dense2(x)
+        x = x + skip
+        skip = x
+        x = self.ln2(x)
+        x = self.conv1(x)
+        x = self.gelu2(x)
+        x = self.conv2(x)
+        x = x + skip
+        return x
+
+
+class CycleGeneratorViT(nn.Module):
+
+    def __init__(self, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
+        super(CycleGeneratorViT, self).__init__()
+        self.conv = nn.Conv2d(in_channels=3, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.blocks = [ViTBlock(embed_dim=embed_dim, num_heads=num_heads) for _ in range(transform_layers)]
+        self.deconv = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=3, kernel_size=patch_size,
+                                         stride=patch_size)
+
+
+    def forward(self, x):
+        out = x
+        for b in self.blocks:
+            out = b(out)
+        out = F.tanh(out)
+        return out
+
+class CycleGeneratorMixer(nn.Module):
+
+    def __init__(self, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
+        super(CycleGeneratorMixer, self).__init__()
+        self.conv = nn.Conv2d(in_channels=3, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.blocks = [MixerBlock(embed_dim=embed_dim) for _ in range(transform_layers)]
+        self.deconv = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=3, kernel_size=patch_size,
+                                         stride=patch_size)
+
+    def forward(self, x):
+        out = x
+        for b in self.blocks:
+            out = b(out)
+        out = F.tanh(out)
+        return out
+
+
 class CycleGenerator(nn.Module):
     """Defines the architecture of the generator network.
        Note: Both generators G_XtoY and G_YtoX have the same architecture in this assignment.
