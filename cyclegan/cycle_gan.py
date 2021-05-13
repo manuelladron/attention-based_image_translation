@@ -93,8 +93,8 @@ def create_model(opts):
         G_YtoX = CycleGenerator(conv_dim=opts.g_conv_dim, init_zero_weights=opts.init_zero_weights, norm=opts.norm)
 
     elif opts.gen=="vit":
-        G_XtoY = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
-        G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_XtoY = CycleGeneratorViT(embed_dim=opts.g_conv_dim, patch_dim=opts.patch_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
+        G_YtoX = CycleGeneratorViT(embed_dim=opts.g_conv_dim, patch_dim=opts.patch_dim, num_heads=8, transform_layers=opts.blocks, patch_size=opts.patch)
 
     elif opts.gen=="mix":
         G_XtoY = CycleGeneratorMixer(embed_dim=opts.g_conv_dim, transform_layers=opts.blocks, patch_size=opts.patch)
@@ -565,6 +565,8 @@ if __name__ == '__main__':
         opts.sample_dir += '_cycle'
 
     # opts.sample_dir += opts.gen_type
+
+    opts.patch_dim = (opts.image_size // opts.patch) ** 2
 
     if os.path.exists(opts.sample_dir):
         cmd = 'rm %s/*' % opts.sample_dir
