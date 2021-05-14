@@ -107,7 +107,7 @@ def create_model(opts):
         
     D_X = model_dict[opts.disc](conv_dim=opts.d_conv_dim, norm=opts.norm)
     D_Y = model_dict[opts.disc](conv_dim=opts.d_conv_dim, norm=opts.norm)
-    print_models(G_XtoY, G_YtoX, D_X, D_Y)
+    # print_models(G_XtoY, G_YtoX, D_X, D_Y)
 
     # todo: B&W add your own initialization here
     G_XtoY.apply(weights_init)
