@@ -383,7 +383,7 @@ class CycleGeneratorMixer(nn.Module):
         # transformation
         model += [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
 
-        model += [View(-1, embed_dim, image_size//4//patch_size, image_size//4//patch_size)]
+        model += [View((-1, embed_dim, image_size//4//patch_size, image_size//4//patch_size))]
 
         # linear de-projection
         model += [nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
