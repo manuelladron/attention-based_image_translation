@@ -345,9 +345,10 @@ class View(nn.Module):
 
     def __init__(self, shape):
         self.shape = shape
+        self.identity = nn.Identity
 
     def forward(self, x):
-        return x.view(*self.shape)
+        return self.identity(x.view(*self.shape))
 
 
 
