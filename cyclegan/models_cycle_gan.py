@@ -263,11 +263,14 @@ class MixerBlock(nn.Module):
         self.conv2 = nn.Conv1d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=1, bias=False)
 
     def forward(self, x):
+        print(x.shape)
         skip = x
         x = self.ln1(x)
         x = self.dense1(x)
+        print(x.shape)
         x = self.gelu1(x)
         x = self.dense2(x)
+        print(x.shape)
         x = x + skip
         skip = x
         x = self.ln2(x)
