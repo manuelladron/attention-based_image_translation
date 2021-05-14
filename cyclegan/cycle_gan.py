@@ -592,7 +592,7 @@ if __name__ == '__main__':
     if opts.use_cycle_consistency_loss:
         opts.sample_dir += '_cycle'
 
-    opts.sample_dir += "_patch_{}_blocks_{}".format(opts.patch, opts.blocks)
+    opts.sample_dir += "_patch_{}_blocks_{}_width_{}".format(opts.patch, opts.blocks, opts.g_conv_dim)
 
     opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2
 

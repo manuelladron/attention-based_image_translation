@@ -345,62 +345,55 @@ class CycleGeneratorMixer(nn.Module):
 
     def __init__(self, patch_dim, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
         super(CycleGeneratorMixer, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=embed_dim // 4, kernel_size=4, stride=2, padding=1)
-        self.in_c1 = nn.InstanceNorm2d(embed_dim // 4)
-        self.conv2 = nn.Conv2d(in_channels=embed_dim // 4, out_channels=embed_dim // 2, kernel_size=4, stride=2,
-                               padding=1)
-        self.in_c2 = nn.InstanceNorm2d(embed_dim // 2)
 
-        self.conv_down = nn.Conv2d(in_channels=embed_dim // 2, out_channels=embed_dim, kernel_size=patch_size,
-                                   stride=patch_size)
+        # stem
+        model = [
+            nn.Conv2d(in_channels=3, out_channels=embed_dim//4, kernel_size=7, padding=3, padding_mode='reflect'),
+            nn.InstanceNorm2d(embed_dim//4),
+            nn.ReLU(True),
+        ]
 
-        self.blocks = [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
-        self.blocks = nn.ModuleList(self.blocks)
+        # downsampling
+        model += [
+            nn.Conv2d(in_channels=embed_dim//4, out_channels=embed_dim//2, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(embed_dim//2),
+            nn.ReLU(True),
 
-        self.deconv_up = nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim // 2, kernel_size=patch_size,
-                                            stride=patch_size)
+            nn.Conv2d(in_channels=embed_dim//2, out_channels=embed_dim, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(embed_dim),
+            nn.ReLU(True),
+        ]
 
-        self.deconv_1 = nn.ConvTranspose2d(in_channels=embed_dim // 2, out_channels=embed_dim // 4, kernel_size=4,
-                                           stride=2, padding=1)
-        self.in_d1 = nn.InstanceNorm2d(embed_dim // 4)
-        self.deconv_2 = nn.ConvTranspose2d(in_channels=embed_dim // 4, out_channels=embed_dim // 4, kernel_size=4,
-                                           stride=2, padding=1)
-        self.in_d2 = nn.InstanceNorm2d(embed_dim // 4)
+        # linear projection
+        model += [nn.Conv2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
 
-        self.conv_out = nn.Conv2d(in_channels=embed_dim // 4, out_channels=3, kernel_size=3, stride=1, padding=1)
+        # transformation
+        model += [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
+
+        # linear de-projection
+        model += [nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
+
+        # upsampling
+        model += [
+            nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim//2, kernel_size=3,
+                               stride=2, padding=1, output_padding=1),
+            nn.InstanceNorm2d(embed_dim//2),
+            nn.ReLU(True),
+
+            nn.ConvTranspose2d(in_channels=embed_dim//2, out_channels=embed_dim//4, kernel_size=3,
+                               stride=2, padding=1, output_padding=1),
+            nn.InstanceNorm2d(embed_dim//4),
+            nn.ReLU(True),
+        ]
+
+        model += [nn.Conv2d(in_channels=embed_dim//4, out_channels=3, kernel_size=7, padding=3, padding_mode='reflect')]
+        model += [nn.Tanh()]
+
+        self.model = nn.Sequential(*model)
 
     def forward(self, x):
-        out = x
 
-        out = self.conv1(out)
-        out = self.in_c1(out)
-        out = F.relu(out)
-
-        out = self.conv2(out)
-        out = self.in_c2(out)
-        out = F.relu(out)
-
-        out = self.conv_down(out)
-        patch_h, patch_w = out.shape[2], out.shape[3]
-        out = out.view(out.shape[0], out.shape[1], -1)
-        for b in self.blocks:
-            out = b(out)
-        out = out.view(out.shape[0], out.shape[1], patch_h, patch_w)
-        out = self.deconv_up(out)
-        out = F.relu(out)
-
-        out = self.deconv_1(out)
-        out = self.in_d1(out)
-        out = F.relu(out)
-
-        out = self.deconv_2(out)
-        out = self.in_d2(out)
-        out = F.relu(out)
-
-        out = self.conv_out(out)
-
-        out = F.tanh(out)
-        return out
+        return self.model(x)
 
 
 class CycleGenerator(nn.Module):
@@ -602,7 +595,7 @@ class PatchDiscriminator(nn.Module):
                           init_zero_weights=False, spectral=spectral)
         
         # Last layer does not have norm and has stride 1 
-        self.conv5 = conv(in_channels=ndf*8, out_channels=1, kernel_size=4, stride=1, padding=0, norm=None,
+        self.conv5 = conv(in_channels=ndf*8, out_channels=1, kernel_size=4, stride=1, padding=1, norm=None,
                           init_zero_weights=False, spectral=spectral)
 
     def forward(self, x):                                 # input [batch, 3, 64, 64]
