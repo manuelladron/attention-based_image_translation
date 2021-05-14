@@ -535,7 +535,7 @@ def create_parser():
     parser.add_argument('--image_size', type=int, default=64, help='The side length N to convert images to NxN.')
     parser.add_argument('--disc', type=str, default='dc')
     parser.add_argument('--gen', type=str, default='cycle')
-    parser.add_argument('--g_conv_dim', type=int, default=32)
+    parser.add_argument('--g_conv_dim', type=int, default=256)
     parser.add_argument('--d_conv_dim', type=int, default=32)
     parser.add_argument('--norm', type=str, default='instance')
     parser.add_argument('--use_cycle_consistency_loss', action='store_true', default=True, help='Choose whether to include the cycle consistency term in the loss.')
@@ -572,7 +572,7 @@ def create_parser():
 
     parser.add_argument('--gpu', type=str, default='0')
 
-    parser.add_argument('--blocks', type=int, default=3)
+    parser.add_argument('--blocks', type=int, default=9)
 
     parser.add_argument('--patch', type=int, default=16)
 
