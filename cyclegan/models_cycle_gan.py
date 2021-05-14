@@ -341,9 +341,19 @@ class CycleGeneratorViT(nn.Module):
         out = F.tanh(out)
         return out
 
+class View(nn.module):
+
+    def __init__(self, shape):
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(*self.shape)
+
+
+
 class CycleGeneratorMixer(nn.Module):
 
-    def __init__(self, patch_dim, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
+    def __init__(self, patch_dim, image_size=256, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
         super(CycleGeneratorMixer, self).__init__()
 
         # stem
@@ -367,8 +377,13 @@ class CycleGeneratorMixer(nn.Module):
         # linear projection
         model += [nn.Conv2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
 
+        # reshape
+        model += [View((-1, embed_dim, patch_dim))]
+
         # transformation
         model += [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
+
+        model += [View(-1, embed_dim, image_size//4//patch_size, image_size//4//patch_size)]
 
         # linear de-projection
         model += [nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
