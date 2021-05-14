@@ -341,14 +341,23 @@ class CycleGeneratorViT(nn.Module):
         out = F.tanh(out)
         return out
 
+
 class View(nn.Module):
-
     def __init__(self, shape):
+        super().__init__()
         self.shape = shape
-        self.identity = nn.Identity
 
-    def forward(self, x):
-        return self.identity(x.view(*self.shape))
+    def __repr__(self):
+        return f'View{self.shape}'
+
+    def forward(self, input):
+        '''
+        Reshapes the input according to the shape saved in the view data structure.
+        '''
+        batch_size = input.size(0)
+        shape = (batch_size, *self.shape)
+        out = input.view(shape)
+        return out
 
 
 
