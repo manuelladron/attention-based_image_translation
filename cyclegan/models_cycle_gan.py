@@ -341,7 +341,7 @@ class CycleGeneratorViT(nn.Module):
         out = F.tanh(out)
         return out
 
-class View(nn.module):
+class View(nn.Module):
 
     def __init__(self, shape):
         self.shape = shape
