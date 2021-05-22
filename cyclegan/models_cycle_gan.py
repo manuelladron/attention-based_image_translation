@@ -10,7 +10,7 @@ from skimage.transform import rescale, resize, downscale_local_mean
 import pdb
 import math
 import numbers
-from blurpool import BlurPool
+# from blurpool import BlurPool
 torch.set_printoptions(edgeitems=15)
 
 
@@ -79,8 +79,6 @@ class GaussianSmoothing(nn.Module):
             filtered (torch.Tensor): Filtered output.
         """
         return self.conv(input, weight=self.weight, groups=self.groups)
-
-
 
 
 class Self_Attn(nn.Module):
@@ -205,7 +203,7 @@ class ResnetBlock(nn.Module):
         self.conv_layer = conv(in_channels=conv_dim, out_channels=conv_dim, kernel_size=3, stride=1, padding=1, norm=norm)
 
     def forward(self, x):
-        out = x + self.conv_layer(x)
+        out = x + F.relu(self.conv_layer(x))
         return out
 
 
@@ -360,17 +358,31 @@ class View(nn.Module):
         return out
 
 
+class PrintLayer(nn.Module):
+    def __init__(self, name=None):
+        super(PrintLayer, self).__init__()
+        self.name = name
+    def forward(self, x):
+        # Do your print / debug stuff here
+        if self.name != None:
+            print(self.name)
+        print(x.shape)
+        return x
 
 class CycleGeneratorMixer(nn.Module):
 
-    def __init__(self, patch_dim, image_size=256, embed_dim=256, transform_layers=4, patch_size=8, num_heads=8):
+    def __init__(self, patch_dim, image_size=256, embed_dim=512, transform_layers=4, patch_size=8, num_heads=8):
         super(CycleGeneratorMixer, self).__init__()
 
+        # print('embedding dim: ', embed_dim) # 512
+        # print('patch dim: ', patch_dim)     # 64
+        # print('patch_Size: ', patch_size)   # 8
         # stem
         model = [
             nn.Conv2d(in_channels=3, out_channels=embed_dim//4, kernel_size=7, padding=3, padding_mode='reflect'),
             nn.InstanceNorm2d(embed_dim//4),
             nn.ReLU(True),
+            # PrintLayer(name='stem')
         ]
 
         # downsampling
@@ -378,26 +390,32 @@ class CycleGeneratorMixer(nn.Module):
             nn.Conv2d(in_channels=embed_dim//4, out_channels=embed_dim//2, kernel_size=3, stride=2, padding=1),
             nn.InstanceNorm2d(embed_dim//2),
             nn.ReLU(True),
-
+            # PrintLayer(name='down1'),
             nn.Conv2d(in_channels=embed_dim//2, out_channels=embed_dim, kernel_size=3, stride=2, padding=1),
             nn.InstanceNorm2d(embed_dim),
             nn.ReLU(True),
+            # PrintLayer(name='down2'),
+            # nn.Conv2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=3, stride=2, padding=1),
+            # nn.InstanceNorm2d(embed_dim),
+            # nn.ReLU(True),
+            # PrintLayer(name='down3'),
         ]
 
         # linear projection
         model += [nn.Conv2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
-
+       # model += [PrintLayer(name='linear proj')]
         # reshape
         model += [View((embed_dim, patch_dim))]
 
         # transformation
         model += [MixerBlock(embed_dim=embed_dim, patch_dim=patch_dim) for _ in range(transform_layers)]
-
+        # model += [ResnetBlock(conv_dim=embed_dim, norm="instance") for _ in range(transform_layers)]
+        #model += [PrintLayer(name='mixer blocks')]
         model += [View((embed_dim, image_size//4//patch_size, image_size//4//patch_size))]
-
+        #model += [PrintLayer(name='after view again')]
         # linear de-projection
         model += [nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)]
-
+        #model += [PrintLayer(name='de-projection')]
         # upsampling
         model += [
             nn.ConvTranspose2d(in_channels=embed_dim, out_channels=embed_dim//2, kernel_size=3,
@@ -417,7 +435,6 @@ class CycleGeneratorMixer(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
-
         return self.model(x)
 
 
@@ -608,6 +625,10 @@ class PatchDiscriminator(nn.Module):
     def __init__(self, conv_dim=64, ndf=64, norm='batch', spectral=False):
         super(PatchDiscriminator, self).__init__()
 
+        ### Settings for the 128 input size model
+        # ndf = 64, self.conv4 -> stride 1, padding 1
+        # self.conv5 -> stride 1, padding 1
+
         # First layer does not have norm layer
         self.conv1 = conv(in_channels=3, out_channels=ndf, kernel_size=4, stride=2, padding=1, norm=None,
                           init_zero_weights=False, spectral=spectral)
@@ -618,29 +639,79 @@ class PatchDiscriminator(nn.Module):
                           init_zero_weights=False, spectral=spectral)
         self.conv4 = conv(in_channels=ndf*4, out_channels=ndf*8, kernel_size=4, stride=1, padding=1, norm='instance',
                           init_zero_weights=False, spectral=spectral)
-        
         # Last layer does not have norm and has stride 1 
         self.conv5 = conv(in_channels=ndf*8, out_channels=1, kernel_size=4, stride=1, padding=1, norm=None,
                           init_zero_weights=False, spectral=spectral)
 
     def forward(self, x):                                 # input [batch, 3, 64, 64]
         # print('PatchGAN')
-        out = F.relu(self.conv1(x))                       # [batch, 64, 32, 32]
-        #print('1st layer: ', out.shape)
+        # print('disc input: ', x.shape)
+        out = F.leaky_relu(self.conv1(x), 0.2, True)                       # [batch, 64, 32, 32]
+        # print('1st layer: ', out.shape)
         ###########################################
         ##   FILL THIS IN: FORWARD PASS   ##
         ###########################################
         out = F.leaky_relu(self.conv2(out), 0.2, True)    # [batch, 128, 16, 16]
-        #print('2nd layer: ', out.shape)
+        # print('2nd layer: ', out.shape)
         out = F.leaky_relu(self.conv3(out), 0.2, True)    # [batch, 256, 8, 8]
-        #print('3rd layer: ', out.shape)
+        # print('3rd layer: ', out.shape)
         out = F.leaky_relu(self.conv4(out), 0.2, True)    # [batch, 512, 4, 4]
-        #print('4th layer: ', out.shape)
-        out = self.conv5(out).squeeze()                   # [batch]
-        #print('5th layer: ', out.shape)
 
+        # print('4th layer: ', out.shape)
+        out = self.conv5(out).squeeze()                   # [batch]
+        # print('5th layer: ', out.shape)
+        #out = out.view(out.shape[0], out.shape[1], -1)
+        # print('returning: ', out.shape)
         return out 
     
+
+class NLayerDiscriminator(nn.Module):
+    """Defines a PatchGAN discriminator"""
+
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
+        """Construct a PatchGAN discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+            n_layers (int)  -- the number of conv layers in the discriminator
+            norm_layer      -- normalization layer
+        """
+        super(NLayerDiscriminator, self).__init__()
+        if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        kw = 4
+        padw = 1
+        sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
+        nf_mult = 1
+        nf_mult_prev = 1
+        for n in range(1, n_layers):  # gradually increase the number of filters
+            nf_mult_prev = nf_mult
+            nf_mult = min(2 ** n, 8)
+            sequence += [
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+                norm_layer(ndf * nf_mult),
+                nn.LeakyReLU(0.2, True)
+            ]
+
+        nf_mult_prev = nf_mult
+        nf_mult = min(2 ** n_layers, 8)
+        sequence += [
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
+            norm_layer(ndf * nf_mult),
+            nn.LeakyReLU(0.2, True)
+        ]
+
+        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+        self.model = nn.Sequential(*sequence)
+
+    def forward(self, input):
+        """Standard forward."""
+        return self.model(input)
+
+
 
 def weights_init2(m, init_='xavier'):
     classname = m.__class__.__name__
