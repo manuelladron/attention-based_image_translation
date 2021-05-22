@@ -21,7 +21,9 @@
 
 import argparse
 import os
+import time
 import warnings
+import pdb 
 
 # Matplotlib
 import matplotlib.pyplot as plt
@@ -44,6 +46,7 @@ from data_loader import get_data_loader
 from models_cycle_gan import CycleGenerator, DCDiscriminator, PatchDiscriminator, weights_init
 from models_cycle_gan import CycleGeneratorViT, CycleGeneratorMixer
 from diff_aug import DiffAugment
+from losses import Criterion
 
 SEED = 11
 
@@ -56,6 +59,9 @@ if torch.cuda.is_available():
     
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 def print_models(G_XtoY, G_YtoX, D_X, D_Y):
     """Prints model information for the generators and discriminators.
@@ -63,21 +69,33 @@ def print_models(G_XtoY, G_YtoX, D_X, D_Y):
     print("                 G_XtoY                ")
     print("---------------------------------------")
     print(G_XtoY)
+    num_params = count_parameters(G_XtoY)
+    print('Num trainable params: ', num_params)
+    logger.add_scalar('Num parameters G_XtoY', num_params)
     print("---------------------------------------")
 
     print("                 G_YtoX                ")
     print("---------------------------------------")
     print(G_YtoX)
+    num_params = count_parameters(G_YtoX)
+    print('Num trainable params: ', num_params)
+    logger.add_scalar('Num parameters G_YtoX', num_params)
     print("---------------------------------------")
 
     print("                  D_X                  ")
     print("---------------------------------------")
     print(D_X)
+    num_params = count_parameters(D_X)
+    print('Num trainable params: ', num_params)
+    logger.add_scalar('Num parameters D_X', num_params)
     print("---------------------------------------")
 
     print("                  D_Y                  ")
     print("---------------------------------------")
     print(D_Y)
+    num_params = count_parameters(D_Y)
+    print('Num trainable params: ', num_params)
+    logger.add_scalar('Num parameters D_Y', num_params)
     print("---------------------------------------")
 
 
@@ -192,28 +210,29 @@ def save_reconstructions(iteration, images_X, images_Y, reconstructed_X, reconst
     imageio.imwrite(path, merged)
     print('Saved {}'.format(path))
 
+def load_state_dicts(path_GY2X, path_GX2Y, path_DX, path_DY):
+    G_XtoY.load_state_dict(torch.load(path_GX2Y))
+    G_XtoY.load_state_dict(torch.load(path_GY2X))
+
+    D_X.load_state_dict(torch.load(path_DX))
+    D_Y.load_state_dict(torch.load(path_DY))
+
+def adjust_learning_rate(optimizer, iter_left, prev_lr):
+    """Linearly decay learning rate starting from epoch 100 """
+    new_lr = prev_lr - (prev_lr / iter_left)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = new_lr
+    return new_lr
+
 
 def training_loop(dataloader_X, dataloader_Y, opts):
     """Runs the training loop.
         * Saves checkpoint every opts.checkpoint_every iterations
         * Saves generated samples every opts.sample_every iterations
     """
-
+    
     # Create generators and discriminators
     G_XtoY, G_YtoX, D_X, D_Y = create_model(opts)
-
-    # print('\n=========== PARAMS =================')
-    # for name, param in G_XtoY.named_parameters():
-    #     print('name: ', name)
-    #     print('param: ', param.shape)
-
-
-    # Load generators, TODO: optimize this pipeline
-#     G_XtoY.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/G_YtoX_iter20000.pkl'))
-#     G_XtoY.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/G_XtoY_iter20000.pkl'))
-    
-#     D_X.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/D_X_iter20000.pkl'))
-#     D_Y.load_state_dict(torch.load('checkpoints_cyclegan/pokemon_water_normal/D_Y_iter20000.pkl'))
 
     g_params = list(G_XtoY.parameters()) + list(G_YtoX.parameters())  # Get generator parameters
     d_params = list(D_X.parameters()) + list(D_Y.parameters())  # Get discriminator parameters
@@ -222,12 +241,16 @@ def training_loop(dataloader_X, dataloader_Y, opts):
     g_optimizer = optim.Adam(g_params, opts.lr, [opts.beta1, opts.beta2])
     d_optimizer = optim.Adam(d_params, opts.lr, [opts.beta1, opts.beta2])
 
-
     # Get some fixed data from domains X and Y for sampling. These are images that are held
     # constant throughout training, that allow us to inspect the model's performance.
     iter_X = iter(dataloader_X)
     iter_Y = iter(dataloader_Y)
 
+    lengths_dataloader = [len(dataloader_X), len(dataloader_Y)]
+    longest_idx = np.argmax(lengths_dataloader)
+    longest_dataloader = lengths_dataloader[longest_idx]
+    
+    #pdb.set_trace()
     fixed_X = utils.to_var(iter_X.next()[0])
     fixed_Y = utils.to_var(iter_Y.next()[0])
 
@@ -243,7 +266,26 @@ def training_loop(dataloader_X, dataloader_Y, opts):
     DY_fakes = []
     
     D_losses = []
+    
+    # Perc loss
+    if opts.use_perc_loss:
+        perc_fct = Criterion(opts)
+
+    # For scheduler
+    first_lr = True
+    iter_left = int(opts.train_iters - (longest_dataloader * 100))
+
     for iteration in range(1, opts.train_iters+1):
+
+        # Once we reach 100 epochs, linearly decay LR.
+        if iteration >= longest_dataloader*100:
+            if first_lr:
+                prev_lr = opts.lr
+            else:
+                prev_lr = lr
+            _ = adjust_learning_rate(g_optimizer, iter_left, prev_lr=prev_lr)
+            lr = adjust_learning_rate(d_optimizer, iter_left, prev_lr=prev_lr)
+            first_lr = False
 
         # Reset data_iter for each epoch
         if iteration % iter_per_epoch == 0:
@@ -292,7 +334,7 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         # D_Y_loss = torch.nn.functional.mse_loss(D_Y(images_Y), label_real_y, reduce='mean')# / bs_y
         D_Y_loss = torch.mean(torch.square(D_Y(images_Y) - label_real_y))
 
-        d_real_loss = D_X_loss + D_Y_loss
+        d_real_loss = (D_X_loss + D_Y_loss) / 2
         d_real_loss.backward()
         d_optimizer.step()
         
@@ -317,8 +359,9 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         
         # 3. Compute the loss for D_X
         # D_X_loss = torch.nn.functional.mse_loss(D_X(fake_X.detach()), label_fake_x, reduce='mean')# / bs_y
-        D_X_loss = torch.mean(torch.square(D_X(fake_X) - label_fake_x))
         
+        D_X_loss = torch.mean(torch.square(D_X(fake_X) - label_fake_x))
+        #print('DX loss: ', D_X_loss)
         # 4. Generate fake images that look like domain Y based on real images in domain X
         fake_Y = G_XtoY(images_X)
         #fake_Y = DiffAugment(fake_Y, policy='translation,cutout')
@@ -371,10 +414,16 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         if opts.use_cycle_consistency_loss:
             reconstructed_Y = G_XtoY(fake_X)
             # 3. Compute the cycle consistency loss (the reconstruction loss)
-            cycle_consistency_loss_ = torch.nn.functional.l1_loss(images_Y, reconstructed_Y, reduce='mean') #/ bs_y
+            cycle_consistency_loss_ = torch.nn.functional.l1_loss(reconstructed_Y, images_Y, reduce='mean') #/ bs_y
             gY_loss += opts.lambda_cycle * cycle_consistency_loss_
             logger.add_scalar('G/XY/cycle', opts.lambda_cycle * cycle_consistency_loss_, iteration)
-
+            # 4. Compute perc loss
+            if opts.use_perc_loss:
+                perc_loss = perc_fct(reconstructed_Y, images_Y)
+                gY_loss += (perc_loss * opts.lambda_perc)
+                logger.add_scalar('G/XY/perc', perc_loss * opts.lambda_perc, iteration)
+                
+                
 #         g_loss.backward()
 #         g_optimizer.step()
         GY_losses.append(gY_loss.item())
@@ -404,15 +453,19 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         if opts.use_cycle_consistency_loss:
             reconstructed_X = G_YtoX(fake_Y)
             # 3. Compute the cycle consistency loss (the reconstruction loss)
-            cycle_consistency_loss = torch.nn.functional.l1_loss(images_X, reconstructed_X, reduce='mean')# / bs_x
+            cycle_consistency_loss = torch.nn.functional.l1_loss(reconstructed_X, images_X, reduce='mean')# / bs_x
             gX_loss += opts.lambda_cycle * cycle_consistency_loss
             logger.add_scalar('G/YX/cycle', cycle_consistency_loss, iteration)
+            # 4. Compute perc loss
+            if opts.use_perc_loss:
+                perc_loss = perc_fct(reconstructed_X, images_X)
+                gY_loss += (perc_loss * opts.lambda_perc)
+                logger.add_scalar('G/YX/perc', perc_loss * opts.lambda_perc, iteration)
 
         g_loss = gX_loss + gY_loss
         g_loss.backward()
         g_optimizer.step()
         GX_losses.append(gX_loss.item())
-
 
         # =========================================
         #            PLOTTING AND SAVING
@@ -487,7 +540,7 @@ def training_loop(dataloader_X, dataloader_Y, opts):
             save_samples(iteration, fixed_Y, fixed_X, G_YtoX, G_XtoY, opts)
             save_reconstructions(iteration, images_X, images_Y, reconstructed_X, reconstructed_Y, opts)
         # Save the model parameters
-        if iteration % opts.checkpoint_every == 0:
+        if iteration % opts.checkpoint_every == 0 or iteration == 20000:
             checkpoint(iteration, G_XtoY, G_YtoX, D_X, D_Y, opts)
 
         del D_X_loss
@@ -500,11 +553,12 @@ def training_loop(dataloader_X, dataloader_Y, opts):
 def main(opts):
     """Loads the data, creates checkpoint and sample directories, and starts the training loop.
     """
-
     # Create  dataloaders for images from the two domains X and Y
     dataloader_X = get_data_loader(opts.X, opts=opts)
     dataloader_Y = get_data_loader(opts.Y, opts=opts)
     print('dataloaders created')
+    print('lengh of dataloader X: ', len(dataloader_X))
+    print('lengh of dataloader Y: ', len(dataloader_Y))
 
     # Create checkpoint and sample directories
     utils.create_dir(opts.checkpoint_dir)
@@ -532,9 +586,9 @@ def create_parser():
     parser = argparse.ArgumentParser()
 
     # Model hyper-parameters
-    parser.add_argument('--image_size', type=int, default=64, help='The side length N to convert images to NxN.')
+    parser.add_argument('--image_size', type=int, default=256, help='The side length N to convert images to NxN.')
     parser.add_argument('--disc', type=str, default='dc')
-    parser.add_argument('--gen', type=str, default='cycle')
+    parser.add_argument('--gen', type=str, default='mix')
     parser.add_argument('--g_conv_dim', type=int, default=256)
     parser.add_argument('--d_conv_dim', type=int, default=32)
     parser.add_argument('--norm', type=str, default='instance')
@@ -554,28 +608,32 @@ def create_parser():
     parser.add_argument('--lambda_cycle', type=float, default=10)
 
     # Data sources
-    parser.add_argument('--X', type=str, default='/Users/manuelladron/iCloud_archive/Documents/_CMU/PHD-CD/spring2021'
-                                                 '/16726_learning_based_image_synthesis/homeworks/hw3/16726_s21_hw3-main/data/cat/grumpifyAprocessed',
+    parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
+                                                 '/CycleGAN/datasets/apple2orange/trainA',
                         help='Choose the type of images for domain X.')
-    parser.add_argument('--Y', type=str, default='/Users/manuelladron/iCloud_archive/Documents/_CMU/PHD-CD/spring2021'
-                                                 '/16726_learning_based_image_synthesis/homeworks/hw3/16726_s21_hw3-main/data/cat/grumpifyBprocessed',
+    parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
+                                                 '/CycleGAN/datasets/apple2orange/trainB',
                         help='Choose the type of images for domain Y.')
-    parser.add_argument('--ext', type=str, default='*.png', help='Choose the type of images for domain Y.')
+    parser.add_argument('--ext', type=str, default='*.jpg', help='Choose the type of images for domain Y.')
     parser.add_argument('--data_aug', type=str, default='deluxe', help='basic / none/ deluxe')
 
     # Saving directories and checkpoint/sample iterations
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/test_cats')
-    parser.add_argument('--sample_dir', type=str, default='cyclegan/cats')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/a2o_256')
+    parser.add_argument('--sample_dir', type=str, default='cyclegan/a2o_256')
     parser.add_argument('--log_step', type=int , default=10)
     parser.add_argument('--sample_every', type=int , default=100)
     parser.add_argument('--checkpoint_every', type=int , default=800)
 
     parser.add_argument('--gpu', type=str, default='0')
-
     parser.add_argument('--blocks', type=int, default=9)
-
-    parser.add_argument('--patch', type=int, default=16)
-
+    parser.add_argument('--patch', type=int, default=4, help='patch size: Sqrt of number of total pixels in a patch')
+    parser.add_argument('--test', type=bool, default=False)
+    
+    parser.add_argument('--use_perc_loss', type=bool, default=False, help="user perc loss")
+    parser.add_argument('--perc_wgt', type=float, default=0.7, help="perc loss lambda")
+    parser.add_argument('--pixel_loss_wgt', type=float, default=0.3, help='perc pixel loss')
+    parser.add_argument('--lambda_perc', type=float, default=0.0005)
+    
     return parser
 
 
@@ -594,7 +652,7 @@ if __name__ == '__main__':
 
     opts.sample_dir += "_patch_{}_blocks_{}_width_{}".format(opts.patch, opts.blocks, opts.g_conv_dim)
 
-    opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2
+    opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2  # number of total patches 
 
     if os.path.exists(opts.sample_dir):
         cmd = 'rm %s/*' % opts.sample_dir
@@ -603,5 +661,7 @@ if __name__ == '__main__':
 
     logger = SummaryWriter(opts.sample_dir)
 
+    st = time.time()
     print_opts(opts)
     main(opts)
+    print(f'Total time: {(time.time()-st)/60} minutes')
