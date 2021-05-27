@@ -210,9 +210,9 @@ def save_reconstructions(iteration, images_X, images_Y, reconstructed_X, reconst
     imageio.imwrite(path, merged)
     print('Saved {}'.format(path))
 
-def load_state_dicts(path_GY2X, path_GX2Y, path_DX, path_DY):
+def load_state_dicts(path_GX2Y, path_GY2X, path_DX, path_DY, G_XtoY, G_YtoX, D_X, D_Y):
     G_XtoY.load_state_dict(torch.load(path_GX2Y))
-    G_XtoY.load_state_dict(torch.load(path_GY2X))
+    G_YtoX.load_state_dict(torch.load(path_GY2X))
 
     D_X.load_state_dict(torch.load(path_DX))
     D_Y.load_state_dict(torch.load(path_DY))
@@ -224,13 +224,11 @@ def adjust_learning_rate(optimizer, iter_left, prev_lr):
         param_group['lr'] = new_lr
     return new_lr
 
-
 def training_loop(dataloader_X, dataloader_Y, opts):
     """Runs the training loop.
         * Saves checkpoint every opts.checkpoint_every iterations
         * Saves generated samples every opts.sample_every iterations
     """
-    
     # Create generators and discriminators
     G_XtoY, G_YtoX, D_X, D_Y = create_model(opts)
 
@@ -240,6 +238,14 @@ def training_loop(dataloader_X, dataloader_Y, opts):
     # Create optimizers for the generators and discriminators
     g_optimizer = optim.Adam(g_params, opts.lr, [opts.beta1, opts.beta2])
     d_optimizer = optim.Adam(d_params, opts.lr, [opts.beta1, opts.beta2])
+
+    # Load state dict
+    # pgx2y = '/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan/checkpoints_cyclegan/a2o_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256_perc_0.001/G_XtoY_iter14400.pkl'
+    # pgy2x = '/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan/checkpoints_cyclegan/a2o_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256_perc_0.001/G_YtoX_iter14400.pkl'
+    # pdx = '/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan/checkpoints_cyclegan/a2o_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256_perc_0.001/D_X_iter14400.pkl'
+    # pdy = '/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan/checkpoints_cyclegan/a2o_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256_perc_0.001/D_Y_iter14400.pkl'
+    #
+    # load_state_dicts(pgx2y, pgy2x, pdx, pdy, G_XtoY, G_YtoX, D_X, D_Y)
 
     # Get some fixed data from domains X and Y for sampling. These are images that are held
     # constant throughout training, that allow us to inspect the model's performance.
@@ -278,14 +284,15 @@ def training_loop(dataloader_X, dataloader_Y, opts):
     for iteration in range(1, opts.train_iters+1):
 
         # Once we reach 100 epochs, linearly decay LR.
-        if iteration >= longest_dataloader*100:
-            if first_lr:
-                prev_lr = opts.lr
-            else:
-                prev_lr = lr
-            _ = adjust_learning_rate(g_optimizer, iter_left, prev_lr=prev_lr)
-            lr = adjust_learning_rate(d_optimizer, iter_left, prev_lr=prev_lr)
-            first_lr = False
+        if opts.sch:
+            if iteration >= longest_dataloader*100:
+                if first_lr:
+                    prev_lr = opts.lr
+                else:
+                    prev_lr = lr
+                _ = adjust_learning_rate(g_optimizer, iter_left, prev_lr=prev_lr)
+                lr = adjust_learning_rate(d_optimizer, iter_left, prev_lr=prev_lr)
+                first_lr = False
 
         # Reset data_iter for each epoch
         if iteration % iter_per_epoch == 0:
@@ -359,7 +366,6 @@ def training_loop(dataloader_X, dataloader_Y, opts):
         
         # 3. Compute the loss for D_X
         # D_X_loss = torch.nn.functional.mse_loss(D_X(fake_X.detach()), label_fake_x, reduce='mean')# / bs_y
-        
         D_X_loss = torch.mean(torch.square(D_X(fake_X) - label_fake_x))
         #print('DX loss: ', D_X_loss)
         # 4. Generate fake images that look like domain Y based on real images in domain X
@@ -422,8 +428,7 @@ def training_loop(dataloader_X, dataloader_Y, opts):
                 perc_loss = perc_fct(reconstructed_Y, images_Y)
                 gY_loss += (perc_loss * opts.lambda_perc)
                 logger.add_scalar('G/XY/perc', perc_loss * opts.lambda_perc, iteration)
-                
-                
+
 #         g_loss.backward()
 #         g_optimizer.step()
         GY_losses.append(gY_loss.item())
@@ -609,30 +614,31 @@ def create_parser():
 
     # Data sources
     parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-                                                 '/CycleGAN/datasets/apple2orange/trainA',
+                                                 '/CycleGAN/datasets/summer2winter_yosemite/trainA',
                         help='Choose the type of images for domain X.')
     parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-                                                 '/CycleGAN/datasets/apple2orange/trainB',
+                                                 '/CycleGAN/datasets/summer2winter_yosemite/trainB',
                         help='Choose the type of images for domain Y.')
     parser.add_argument('--ext', type=str, default='*.jpg', help='Choose the type of images for domain Y.')
     parser.add_argument('--data_aug', type=str, default='deluxe', help='basic / none/ deluxe')
 
     # Saving directories and checkpoint/sample iterations
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/a2o_256')
-    parser.add_argument('--sample_dir', type=str, default='cyclegan/a2o_256')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/s2w_256')
+    parser.add_argument('--sample_dir', type=str, default='cyclegan/s2w_256')
     parser.add_argument('--log_step', type=int , default=10)
     parser.add_argument('--sample_every', type=int , default=100)
     parser.add_argument('--checkpoint_every', type=int , default=800)
 
     parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--blocks', type=int, default=9)
-    parser.add_argument('--patch', type=int, default=4, help='patch size: Sqrt of number of total pixels in a patch')
+    parser.add_argument('--patch', type=int, default=8, help='patch size: Sqrt of number of total pixels in a patch')
     parser.add_argument('--test', type=bool, default=False)
-    
-    parser.add_argument('--use_perc_loss', type=bool, default=False, help="user perc loss")
+
+    parser.add_argument('--sch', type=bool, default=True, help="use scheduler - linear rate decay after 100 epochs")
+    parser.add_argument('--use_perc_loss', type=bool, default=False, help="use perc loss")
     parser.add_argument('--perc_wgt', type=float, default=0.7, help="perc loss lambda")
     parser.add_argument('--pixel_loss_wgt', type=float, default=0.3, help='perc pixel loss')
-    parser.add_argument('--lambda_perc', type=float, default=0.0005)
+    parser.add_argument('--lambda_perc', type=float, default=0)
     
     return parser
 
@@ -644,20 +650,29 @@ if __name__ == '__main__':
     print(f"RUN: {vars(opts)}")
 
     os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu
+
+    ## Sample directory
     opts.sample_dir = os.path.join('output/', opts.sample_dir,
                                    '%s_%g' % (opts.X.split('/')[0], opts.lambda_cycle))
     opts.sample_dir += '%s_%s_%s_%s_%s' % (opts.data_aug, opts.norm, opts.disc, opts.gen, opts.init_type)
     if opts.use_cycle_consistency_loss:
         opts.sample_dir += '_cycle'
-
     opts.sample_dir += "_patch_{}_blocks_{}_width_{}".format(opts.patch, opts.blocks, opts.g_conv_dim)
+    if opts.use_perc_loss:
+        opts.sample_dir += f"_perc_{opts.lambda_perc}"
+    ## Checkpoints directory
+    opts.checkpoint_dir = os.path.join(opts.checkpoint_dir,
+                                   '%s_%g' % (opts.X.split('/')[0], opts.lambda_cycle))
+    opts.checkpoint_dir += '%s_%s_%s_%s' % (opts.data_aug, opts.norm, opts.disc, opts.gen)
+    opts.checkpoint_dir += "_patch_{}_blocks_{}_width_{}".format(opts.patch, opts.blocks, opts.g_conv_dim)
+    if opts.use_perc_loss:
+        opts.checkpoint_dir += f"_perc_{opts.lambda_perc}"
 
-    opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2  # number of total patches 
+    opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2  # number of total patches
 
     if os.path.exists(opts.sample_dir):
         cmd = 'rm %s/*' % opts.sample_dir
         os.system(cmd)
-
 
     logger = SummaryWriter(opts.sample_dir)
 
