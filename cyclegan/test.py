@@ -273,9 +273,9 @@ def create_parser():
     parser = argparse.ArgumentParser()
 
     # Model hyper-parameters
-    parser.add_argument('--image_size', type=int, default=256, help='The side length N to convert images to NxN.')
+    parser.add_argument('--image_size', type=int, default=128, help='The side length N to convert images to NxN.')
     parser.add_argument('--gen', type=str, default='mix')
-    parser.add_argument('--g_conv_dim', type=int, default=256)
+    parser.add_argument('--g_conv_dim', type=int, default=512)
     parser.add_argument('--norm', type=str, default='instance')
     parser.add_argument('--use_cycle_consistency_loss', action='store_true', default=True,
                         help='Choose whether to include the cycle consistency term in the loss.')
@@ -288,38 +288,38 @@ def create_parser():
     parser.add_argument('--num_workers', type=int, default=0, help='The number of threads to use for the DataLoader.')
 
     # Data sources
-    parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/BestCycleGAN/Summer/Real',
+    parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/BestCycleGAN/Horse/Real',
                         help='Choose the type of images for domain X.')
-    parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/BestCycleGAN/Winter/Real',
+    parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/BestCycleGAN/Zebra/Real',
                         help='Choose the type of images for domain Y.')
     # parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-    #                                              '/CycleGAN/datasets/summer2winter_yosemite/testA', help='Choose the '
+    #                                              '/CycleGAN/datasets/horse2zebra/testA', help='Choose the '
     #                                                                                                    'type of '
     #                                                                                            'images for domain X.')
     # parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-    #                                              '/CycleGAN/datasets/summer2winter_yosemite/testB',
+    #                                              '/CycleGAN/datasets/horse2zebra/testB',
     #                                      help='Choose the type of images for domain Y.')
 
     parser.add_argument('--load_G_XtoY',
                         default='/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan'
-                                '/checkpoints_cyclegan/s2w_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256'
+                                '/checkpoints_cyclegan/h2z_128/_10deluxe_instance_dc_mix_patch_4_blocks_9_width_512_perc_0.0005'
                                 '/G_XtoY_iter20000.pkl')
 
     parser.add_argument('--load_G_YtoX',
                         default='/home/manuelladron/projects/lbis_p/attention-based_image_translation/cyclegan'
-                                '/checkpoints_cyclegan/s2w_256/_10deluxe_instance_dc_mix_patch_8_blocks_9_width_256'
+                                '/checkpoints_cyclegan/h2z_128/_10deluxe_instance_dc_mix_patch_4_blocks_9_width_512_perc_0.0005'
                                 '/G_YtoX_iter20000.pkl')
 
     parser.add_argument('--ext', type=str, default='*.jpg', help='Choose the type of images for domain Y.')
     parser.add_argument('--data_aug', type=str, default='deluxe', help='basic / none/ deluxe')
 
     # Saving directories and checkpoint/sample iterations
-    parser.add_argument('--sample_dir', type=str, default='cyclegan/s2w_256')
+    parser.add_argument('--sample_dir', type=str, default='cyclegan/h2z_128')
     parser.add_argument('--save_ind', type=bool, default=True, help='save individual pictures, without original pair')
 
     parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--blocks', type=int, default=9)
-    parser.add_argument('--patch', type=int, default=8)
+    parser.add_argument('--patch', type=int, default=4)
     parser.add_argument('--test', type=bool, default=True)
 
     return parser
@@ -336,7 +336,7 @@ if __name__ == '__main__':
     opts.sample_dir = os.path.join('output/', opts.sample_dir,
                                    '%s_' % (opts.X.split('/')[0]))
     if opts.save_ind:
-        opts.sample_dir += f'test_set_ind_width_{opts.g_conv_dim}_bestCyclegan'
+        opts.sample_dir += f'test_set_ind_width_{opts.g_conv_dim}_perc0.0005_bestCycleGAN'
         # X to Y Follows naming order of the dataset -> Apple to Orange, Horse 2 Zebra, Summer 2 Winter etc.
         opts.x2y_dir = opts.sample_dir + '_x2y'
         opts.y2x_dir = opts.sample_dir + '_y2x'
@@ -346,7 +346,7 @@ if __name__ == '__main__':
         opts.reals_y_dir = opts.sample_dir + f'_reals_y'
 
     else:
-        opts.sample_dir += f'test_set_batch_{opts.batch_size}_width_{opts.g_conv_dim}'
+        opts.sample_dir += f'test_set_batch_{opts.batch_size}_width_{opts.g_conv_dim}_perc0.0005_bestCycleGAN'
     
     opts.patch_dim = (opts.image_size // opts.patch // 4) ** 2
 

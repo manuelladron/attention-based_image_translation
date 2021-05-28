@@ -584,17 +584,16 @@ def print_opts(opts):
             print('{:>30}: {:<30}'.format(key, opts.__dict__[key]).center(80))
     print('=' * 80)
 
-
 def create_parser():
     """Creates a parser for command-line arguments.
     """
     parser = argparse.ArgumentParser()
 
     # Model hyper-parameters
-    parser.add_argument('--image_size', type=int, default=256, help='The side length N to convert images to NxN.')
+    parser.add_argument('--image_size', type=int, default=128, help='The side length N to convert images to NxN.')
     parser.add_argument('--disc', type=str, default='dc')
     parser.add_argument('--gen', type=str, default='mix')
-    parser.add_argument('--g_conv_dim', type=int, default=256)
+    parser.add_argument('--g_conv_dim', type=int, default=512)
     parser.add_argument('--d_conv_dim', type=int, default=32)
     parser.add_argument('--norm', type=str, default='instance')
     parser.add_argument('--use_cycle_consistency_loss', action='store_true', default=True, help='Choose whether to include the cycle consistency term in the loss.')
@@ -614,31 +613,31 @@ def create_parser():
 
     # Data sources
     parser.add_argument('--X', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-                                                 '/CycleGAN/datasets/summer2winter_yosemite/trainA',
+                                                 '/CycleGAN/datasets/horse2zebra/trainA',
                         help='Choose the type of images for domain X.')
     parser.add_argument('--Y', type=str, default='/home/manuelladron/datasets/people.eecs.berkeley.edu/~taesung_park'
-                                                 '/CycleGAN/datasets/summer2winter_yosemite/trainB',
+                                                 '/CycleGAN/datasets/horse2zebra/trainB',
                         help='Choose the type of images for domain Y.')
     parser.add_argument('--ext', type=str, default='*.jpg', help='Choose the type of images for domain Y.')
     parser.add_argument('--data_aug', type=str, default='deluxe', help='basic / none/ deluxe')
 
     # Saving directories and checkpoint/sample iterations
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/s2w_256')
-    parser.add_argument('--sample_dir', type=str, default='cyclegan/s2w_256')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_cyclegan/h2z_128')
+    parser.add_argument('--sample_dir', type=str, default='cyclegan/h2z_128')
     parser.add_argument('--log_step', type=int , default=10)
     parser.add_argument('--sample_every', type=int , default=100)
     parser.add_argument('--checkpoint_every', type=int , default=800)
 
     parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--blocks', type=int, default=9)
-    parser.add_argument('--patch', type=int, default=8, help='patch size: Sqrt of number of total pixels in a patch')
+    parser.add_argument('--patch', type=int, default=4, help='patch size: Sqrt of number of total pixels in a patch')
     parser.add_argument('--test', type=bool, default=False)
 
     parser.add_argument('--sch', type=bool, default=True, help="use scheduler - linear rate decay after 100 epochs")
-    parser.add_argument('--use_perc_loss', type=bool, default=False, help="use perc loss")
+    parser.add_argument('--use_perc_loss', type=bool, default=True, help="use perc loss")
     parser.add_argument('--perc_wgt', type=float, default=0.7, help="perc loss lambda")
     parser.add_argument('--pixel_loss_wgt', type=float, default=0.3, help='perc pixel loss')
-    parser.add_argument('--lambda_perc', type=float, default=0)
+    parser.add_argument('--lambda_perc', type=float, default=0.0005)
     
     return parser
 
